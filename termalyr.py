@@ -75,7 +75,7 @@ def resolve_color(value):
             b = int(value[5:7], 16)
             return f"\033[38;2;{r};{g};{b}m"
         except ValueError:
-            print(f"Invalid hex color: {value}, falling back to cyan")
+            print(f"Invalid hex color: {value}, falling back to white")
             return NAMED_COLORS["cyan"]
     name = value.lower()
     if name in NAMED_COLORS:
