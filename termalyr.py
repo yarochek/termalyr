@@ -44,7 +44,7 @@ def parse_args():
     )
     parser.add_argument(
         "-c", "--color",
-        default="cyan",
+        default="white",
         metavar="COLOR|#RRGGBB",
         help=(
             "Text color. Named: white, red, green, yellow, blue, purple, cyan. "
