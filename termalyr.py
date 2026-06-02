@@ -10,8 +10,8 @@ import requests
 import pyfiglet
 
 
-CACHE_DIR = Path("lyrics_cache")
-CACHE_DIR.mkdir(exist_ok=True)
+CACHE_DIR = Path.home() / ".cache" / "termalyr"
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 TRACK_RE = re.compile(r"\[(\d+):(\d+\.\d+)\](.*)")
 
@@ -48,7 +48,7 @@ def parse_args():
         metavar="COLOR|#RRGGBB",
         help=(
             "Text color. Named: white, red, green, yellow, blue, purple, cyan. "
-            "Or hex: #FF8800. Default: cyan"
+            "Or hex: #FF8800. Default: white"
         )
     )
     parser.add_argument(
