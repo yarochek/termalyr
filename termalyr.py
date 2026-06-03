@@ -76,12 +76,12 @@ def resolve_color(value):
             return f"\033[38;2;{r};{g};{b}m"
         except ValueError:
             print(f"Invalid hex color: {value}, falling back to white")
-            return NAMED_COLORS["cyan"]
+            return NAMED_COLORS["white"]
     name = value.lower()
     if name in NAMED_COLORS:
         return NAMED_COLORS[name]
-    print(f"Unknown color: {value}, falling back to cyan")
-    return NAMED_COLORS["cyan"]
+    print(f"Unknown color: {value}, falling back to white")
+    return NAMED_COLORS["white"]
 
 
 def move_cursor(row, col):
