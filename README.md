@@ -14,6 +14,6 @@ yay -S termalyr
 ```
 
 
-### EXAMPLE
+## EXAMPLE
 
 https://github.com/user-attachments/assets/d66f664a-9575-4592-ad83-8bc693a13ae9
