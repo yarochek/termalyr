@@ -8,7 +8,9 @@ import shutil
 from pathlib import Path
 import requests
 import pyfiglet
+import setproctitle
 
+setproctitle.setproctitle("termalyr")
 
 CACHE_DIR = Path.home() / ".cache" / "termalyr"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -131,23 +133,45 @@ def run(cmd):
     return subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL).strip()
 
 
-def get_track():
+def get_active_player():
     try:
-        return run(["playerctl", "metadata", "--format", "{{ artist }}|||{{ title }}"])
+        status = run(["playerctl", "-p", "spotify", "status"])
+        if status == "Playing":
+            return "spotify"
+    except Exception:
+        pass
+
+    try:
+        players = run(["playerctl", "--list-all"]).splitlines()
+        for p in players:
+            try:
+                if run(["playerctl", "-p", p, "status"]) == "Playing":
+                    return p
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    return None
+
+
+def get_track(player):
+    try:
+        return run(["playerctl", "-p", player, "metadata", "--format", "{{ artist }}|||{{ title }}"])
     except Exception:
         return ""
 
 
-def get_status():
+def get_status(player):
     try:
-        return run(["playerctl", "status"])
+        return run(["playerctl", "-p", player, "status"])
     except Exception:
         return ""
 
 
-def get_position():
+def get_position(player):
     try:
-        return float(run(["playerctl", "position"]))
+        return float(run(["playerctl", "-p", player, "position"]))
     except Exception:
         return 0.0
 
@@ -210,22 +234,32 @@ def main():
     lyrics = []
     idx = -1
     last_status_check = 0
+    last_player_check = 0
     status = "Stopped"
+    active_player = None
 
     try:
         while True:
             try:
                 now = time.time()
 
+                if now - last_player_check > 3:
+                    active_player = get_active_player()
+                    last_player_check = now
+
+                if not active_player:
+                    time.sleep(0.5)
+                    continue
+
                 if now - last_status_check > 0.5:
-                    status = get_status()
+                    status = get_status(active_player)
                     last_status_check = now
 
                 if status != "Playing":
                     time.sleep(0.2)
                     continue
 
-                raw = get_track()
+                raw = get_track(active_player)
 
                 if not raw or "|||" not in raw:
                     time.sleep(0.5)
@@ -259,7 +293,7 @@ def main():
                     time.sleep(0.1)
                     continue
 
-                pos = get_position() + args.offset
+                pos = get_position(active_player) + args.offset
 
                 new_idx = -1
                 for i, line in enumerate(lyrics):
