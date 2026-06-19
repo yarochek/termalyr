@@ -1,2 +1,2 @@
 #!/bin/bash
-exec -a termalyr python3 /usr/share/termalyr/termalyr.py "$@"
+exec /usr/bin/python3 /usr/share/termalyr/termalyr.py "$@"
