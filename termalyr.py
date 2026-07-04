@@ -33,16 +33,9 @@ NAMED_COLORS = {
     "cyan":   "\033[36m",
 }
 
-                                                                   
-                                                                        
 PRIORITY_PLAYERS = ("spotify",)
 
-TITLE_JUNK_SUFFIXES = (
-    " - YouTube Music",
-    " | YouTube Music",
-    " - YouTube",
-    " | YouTube",
-)
+DEGENERATE_TITLES = {"youtube music", "youtube"}
 
 
 def parse_args():
@@ -151,7 +144,20 @@ def list_players():
         return []
 
 
-def get_active_player():
+def has_valid_metadata(player):
+    raw = get_track(player)
+    if not raw or "|||" not in raw:
+        return False
+    _artist, title = raw.split("|||", 1)
+    title = title.strip()
+    if not title:
+        return False
+    if title.lower() in DEGENERATE_TITLES:
+        return False
+    return True
+
+
+def get_active_player(current=None):
     players = list_players()
     if not players:
         return None
@@ -169,6 +175,14 @@ def get_active_player():
 
     if not playing:
         return None
+
+    valid_playing = [p for p in playing if has_valid_metadata(p)]
+    if valid_playing:
+        playing = valid_playing
+
+    if current and current in playing:
+        return current
+
     if len(playing) == 1:
         return playing[0]
 
@@ -203,29 +217,22 @@ def get_position(player):
         return 0.0
 
 
-def clean_title(title):
-    title = title.strip()
-    for suffix in TITLE_JUNK_SUFFIXES:
-        if title.endswith(suffix):
-            title = title[: -len(suffix)]
-    return title.strip()
-
-
 def split_artist_title(artist, title):
-    title = clean_title(title)
+    title = title.strip()
     artist = artist.strip()
 
-    if artist:
+    if artist and title:
         return artist, title
 
-    for sep in (" - ", " – ", " — "):
-        if sep in title:
-            maybe_artist, maybe_title = title.split(sep, 1)
-            maybe_artist, maybe_title = maybe_artist.strip(), maybe_title.strip()
-            if maybe_artist and maybe_title:
-                return maybe_artist, maybe_title
+    if not artist:
+        for sep in (" - ", " – ", " — "):
+            if sep in title:
+                maybe_artist, maybe_title = title.split(sep, 1)
+                maybe_artist, maybe_title = maybe_artist.strip(), maybe_title.strip()
+                if maybe_artist and maybe_title:
+                    return maybe_artist, maybe_title
 
-    return artist, title
+    return None, None
 
 
 def parse_lrc(text):
@@ -269,21 +276,6 @@ def fetch_lyrics(artist, title):
     except Exception:
         pass
 
-    if not artist:
-        try:
-            r = requests.get(
-                "https://lrclib.net/api/search",
-                params={"q": title},
-                timeout=10
-            )
-            if r.status_code == 200:
-                results = r.json()
-                for candidate in results:
-                    if candidate.get("syncedLyrics"):
-                        return candidate
-        except Exception:
-            pass
-
     return None
 
 
@@ -311,7 +303,7 @@ def main():
                 now = time.time()
 
                 if now - last_player_check > 3:
-                    active_player = get_active_player()
+                    active_player = get_active_player(active_player)
                     last_player_check = now
 
                 if not active_player:
@@ -334,11 +326,17 @@ def main():
 
                 raw_artist, raw_title = raw.split("|||", 1)
                 artist, title = split_artist_title(raw_artist, raw_title)
-                track = f"{artist} - {title}"
+
+                track = raw
 
                 if track != current_track:
                     current_track = track
                     idx = -1
+
+                    if artist is None:
+                        draw("No Lyrics")
+                        lyrics = []
+                        continue
 
                     draw("Loading...")
 
