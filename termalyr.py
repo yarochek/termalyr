@@ -33,6 +33,17 @@ NAMED_COLORS = {
     "cyan":   "\033[36m",
 }
 
+                                                                   
+                                                                        
+PRIORITY_PLAYERS = ("spotify",)
+
+TITLE_JUNK_SUFFIXES = (
+    " - YouTube Music",
+    " | YouTube Music",
+    " - YouTube",
+    " | YouTube",
+)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -133,26 +144,42 @@ def run(cmd):
     return subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL).strip()
 
 
+def list_players():
+    try:
+        return [p for p in run(["playerctl", "--list-all"]).splitlines() if p.strip()]
+    except Exception:
+        return []
+
+
 def get_active_player():
-    try:
-        status = run(["playerctl", "-p", "spotify", "status"])
-        if status == "Playing":
-            return "spotify"
-    except Exception:
-        pass
+    players = list_players()
+    if not players:
+        return None
 
-    try:
-        players = run(["playerctl", "--list-all"]).splitlines()
+    for priority_name in PRIORITY_PLAYERS:
         for p in players:
-            try:
-                if run(["playerctl", "-p", p, "status"]) == "Playing":
+            if p == priority_name or p.startswith(priority_name + "."):
+                if get_status(p) == "Playing":
                     return p
-            except Exception:
-                continue
-    except Exception:
-        pass
 
-    return None
+    rest = [p for p in players if not any(
+        p == pr or p.startswith(pr + ".") for pr in PRIORITY_PLAYERS
+    )]
+    playing = [p for p in rest if get_status(p) == "Playing"]
+
+    if not playing:
+        return None
+    if len(playing) == 1:
+        return playing[0]
+
+    positions_before = {p: get_position(p) for p in playing}
+    time.sleep(0.3)
+    for p in playing:
+        delta = get_position(p) - positions_before[p]
+        if delta > 0.05:
+            return p
+
+    return playing[0]
 
 
 def get_track(player):
@@ -174,6 +201,31 @@ def get_position(player):
         return float(run(["playerctl", "-p", player, "position"]))
     except Exception:
         return 0.0
+
+
+def clean_title(title):
+    title = title.strip()
+    for suffix in TITLE_JUNK_SUFFIXES:
+        if title.endswith(suffix):
+            title = title[: -len(suffix)]
+    return title.strip()
+
+
+def split_artist_title(artist, title):
+    title = clean_title(title)
+    artist = artist.strip()
+
+    if artist:
+        return artist, title
+
+    for sep in (" - ", " – ", " — "):
+        if sep in title:
+            maybe_artist, maybe_title = title.split(sep, 1)
+            maybe_artist, maybe_title = maybe_artist.strip(), maybe_title.strip()
+            if maybe_artist and maybe_title:
+                return maybe_artist, maybe_title
+
+    return artist, title
 
 
 def parse_lrc(text):
@@ -210,14 +262,29 @@ def fetch_lyrics(artist, title):
             params={"artist_name": artist, "track_name": title},
             timeout=10
         )
-        if r.status_code != 200:
-            return None
-        data = r.json()
-        if not data.get("syncedLyrics"):
-            return None
-        return data
+        if r.status_code == 200:
+            data = r.json()
+            if data.get("syncedLyrics"):
+                return data
     except Exception:
-        return None
+        pass
+
+    if not artist:
+        try:
+            r = requests.get(
+                "https://lrclib.net/api/search",
+                params={"q": title},
+                timeout=10
+            )
+            if r.status_code == 200:
+                results = r.json()
+                for candidate in results:
+                    if candidate.get("syncedLyrics"):
+                        return candidate
+        except Exception:
+            pass
+
+    return None
 
 
 def main():
@@ -265,7 +332,8 @@ def main():
                     time.sleep(0.5)
                     continue
 
-                artist, title = raw.split("|||", 1)
+                raw_artist, raw_title = raw.split("|||", 1)
+                artist, title = split_artist_title(raw_artist, raw_title)
                 track = f"{artist} - {title}"
 
                 if track != current_track:
